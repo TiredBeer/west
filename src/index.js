@@ -3,15 +3,17 @@ import Game from './Game.js';
 import TaskQueue from './TaskQueue.js';
 import SpeedRate from './SpeedRate.js';
 
+// Функция для проверки, является ли карта уткой
 function isDuck(card) {
     return card && card.quacks && card.swims;
 }
 
+// Функция для проверки, является ли карта собакой
 function isDog(card) {
     return card instanceof Dog;
 }
 
-// Дает описание существа по схожести с утками и собаками
+// Функция для получения описания существа по схожести с утками и собаками
 function getCreatureDescription(card) {
     if (isDuck(card) && isDog(card)) {
         return 'Утка-Собака';
@@ -25,12 +27,15 @@ function getCreatureDescription(card) {
     return 'Существо';
 }
 
+// Базовый класс Creature, наследуемый от Card
 class Creature extends Card {
     constructor(name, power) {
         super(name, power, null);
     }
 }
 
+// Переопределяем метод getDescriptions для Creature:
+// Первая строка – описание из getCreatureDescription, вторая – базовое описание Card.
 Creature.prototype.getDescriptions = function () {
     let arr = [];
     arr.push(getCreatureDescription(this));
@@ -39,7 +44,7 @@ Creature.prototype.getDescriptions = function () {
 }
 
 
-// Основа для утки.
+// Карта-утка
 class Duck extends Creature {
     constructor() {
         super('Мирная утка', 2);
@@ -56,18 +61,40 @@ class Dog extends Creature {
     }
 }
 
+// Карта Громила (Trasher)
 class Trasher extends Dog {
     constructor() {
         super('Громила', 5);
     }
-
     modifyTakenDamage(value, fromCard, gameContext, continuation) {
         this.view.signalAbility(() => {super.modifyTakenDamage(value - 1, fromCard, gameContext, continuation); })
     };
 
     getDescriptions() {
         return ["-1 к получаемому урону", ...super.getDescriptions()];
-    };
+    }
+}
+
+// ★ Новый тип карты: Gatling
+// Наследуется от Creature. При атаке последовательно наносит 2 урона каждой карте противника.
+class Gatling extends Creature {
+    constructor() {
+        super('Гатлинг', 6);
+    }
+    attack(gameContext, continuation) {
+        const taskQueue = new TaskQueue();
+        // Получаем все карты противника, которые находятся на столе
+        const enemyCards = gameContext.oppositePlayer.table.filter(card => card != null);
+        enemyCards.forEach(card => {
+            taskQueue.push(onDone => {
+                // Выполняем анимацию атаки
+                this.view.showAttack(() => {});
+                // Наносим 2 урона атакуемой карте
+                this.dealDamageToCreature(2, card, gameContext, onDone);
+            });
+        });
+        taskQueue.continueWith(continuation);
+    }
 }
 
 class Lad extends Dog {
@@ -113,12 +140,12 @@ class Lad extends Dog {
     }
 }
 
+// Тестовые колоды для проверки работы карты Gatling
 const seriffStartDeck = [
     new Duck(),
     new Duck(),
     new Duck(),
-    new Duck(),
-    new Duck(),
+    new Gatling(),
 ];
 const banditStartDeck = [
     new Trasher(),
@@ -127,11 +154,10 @@ const banditStartDeck = [
     new Lad(),
 ];
 
-
 // Создание игры.
 const game = new Game(seriffStartDeck, banditStartDeck);
 
-// Глобальный объект, позволяющий управлять скоростью всех анимаций.
+// Глобальный объект для управления скоростью анимаций.
 SpeedRate.set(1);
 
 // Запуск игры.
